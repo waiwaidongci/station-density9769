@@ -17,6 +17,7 @@ export const domain = {
   "source": "巡测专题",
   "record": "微站观测",
   "note": "复访计划",
+  "retest": "复测校正",
   "source_table": "surveys",
   "record_table": "station_readings",
   "run_table": "density_runs",
@@ -93,6 +94,12 @@ export const domain = {
     "exhibit": "展品编号",
     "prediction": "预计评分",
     "method": "计算依据",
-    "neighbor_count": "参与邻居数"
+    "neighbor_count": "参与邻居数",
+    "station": "站号",
+    "zone": "早期分区",
+    "n": "配对站数",
+    "max_abs": "三项最大变化",
+    "p_value": "校正 p 值",
+    "reason": "说明"
   }
 };

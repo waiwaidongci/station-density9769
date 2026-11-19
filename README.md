@@ -13,7 +13,8 @@
 3. 分析配置：冻结来源、参数和全部样本，进入Redis队列。
 4. 完整结果：真实算法摘要、专属诊断、全部CSV导出和可恢复失败态。
 5. 复访计划：分析师草案→负责人批准→阅读者下载批准快照。
-6. 审计：登录、来源修改、任务worker完成、业务说明批准等事件。
+6. 复测校正：冻结一份早期密度研究和两期复测，按站号配对做全区最大统计量校正置换检验，发布优先复访分区。
+7. 审计：登录、来源修改、任务worker完成、业务说明批准、复测发布等事件。
 
 ## 快速启动
 
@@ -31,7 +32,7 @@ docker compose exec -T backend python -m scripts.seed_demo
 |---|---|
 | frontend | 原生 HTML / CSS / JS ES Modules，Nginx代理 `/api/` |
 | backend | Python3.11 / FastAPI / SQLAlchemy / JWT |
-| worker | 独立Python进程，Redis BLPOP队列，持久化结果/CSV/心跳 |
+| worker | 独立Python进程，Redis BLPOP轮询 `analysis:queue` 与 `retest:queue`，持久化结果/CSV/分批复测进度/心跳 |
 | db | PostgreSQL16，命名卷持久化 |
 | redis | Redis7，AOF命名卷 |
 
@@ -55,7 +56,7 @@ JWT有效期8小时；PBKDF2盐化哈希保存密码；角色每请求从数据�
 
 Survey / StationReading / DensityRun / VisitPlan 是核心实体；另有User和Audit。数据库实际表：`surveys` → `station_readings` → `density_runs` → `visit_plans`。样本以固定字段JSON保存，后端按以下字段严格验证，不接受未知字段替代必填值：温度 ℃（`temperature`）、相对湿度 %（`humidity`）、颗粒浓度 μg/m³（`particles`）。
 
-实体贯穿 `backend/src/models`、`schemas`、`services`、`controllers`、`routes`，以及 `frontend/src/api/research.js`、`stores/research.js` 和 `pages`。`Source.key` 与 `(Record.source_id, reference)` 为自然键；来源改名不会修改已冻结任务输入。业务说明在创建时保存结果快照，批准后从该快照导出。
+复测校正另用 `retest_studies` 表（早期任务、两期来源、冻结快照、置换进度、结果与核对）贯穿 `backend/src/models/retest.py`、`schemas/retest.py`、`services/retest.py`、`controllers/retest.py`、`routes/retest.py`，前端为 `pages/retest.js` 与 `api/research.js` 的 `retestApi`。实体贯穿 `backend/src/models`、`schemas`、`services`、`controllers`、`routes`，以及 `frontend/src/api/research.js`、`stores/research.js` 和 `pages`。`Source.key` 与 `(Record.source_id, reference)` 为自然键；来源改名不会修改已冻结任务输入。业务说明在创建时保存结果快照，批准后从该快照导出。
 
 ## 算法与口径
 
@@ -70,6 +71,19 @@ Survey / StationReading / DensityRun / VisitPlan 是核心实体；另有User和
 
 已知边界：只在温度/湿度/颗粒三个标准化特征上做密度分区；不是地理显著性、风险诊断或自动污染识别。eps敏感，分区编号没有大小顺序；含常量列明确拒绝。
 
+### 两期复测校正
+
+复测校正把一份已完成的早期密度研究和两期复测来源冻结在一起，计算位于 `backend/src/services/retest_algorithm.py`，服务编排在 `retest.py`。口径固定：
+
+- 站号取样本编号末尾数字段（如 `HL-202611-02-0007` → `0007`；编号不含数字时以编号本身为准），两期按站号一一配对。仅一期出现、站号重复、两期字段缺失或非有限数值的记录分别单列，不进入检验。
+- 分区与标准化尺度**沿用早期密度任务的冻结结果**，不重新拟合 DBSCAN，也不重新计算均值和尺度。
+- 每个分区取温度、湿度、颗粒三项**标准化平均变化的最大绝对值**作为统计量，变化方向为第二期减第一期。
+- 置换时**同站三项一起换期**（整站符号翻转），每次置换取**全区最大统计量**；以该最大值分布校正各区 p 值（Westfall–Young 式 max-statistic 校正）。因此任一区的 p 值对「同时看多个区，碰巧波动」是保守的。
+- 参与检验的配对站合计不足 10 对：全枚举 2^n 个换期组合，p = 超限组合数 / 全部组合；否则固定种子 42 抽取 10000 次，p = (1+超限)/(1+10000)。整区没有配对站的分区、早期噪声站和早期不存在的站不参与检验，单独列出。
+- 校正后 p < 0.05 的分区标为优先复访，按 p 值升序排列。
+
+试算按每 500 次置换一批提交进度；中断后重新入队会从已完成批次继续，同一批不会重复计入（批次结果按种子重算，结果与不中断一致）。worker 认领任务使用原子租约和心跳，重复投递不会二次计算。只有试算批次齐全且自动核对（配对站数、分区归属、无噪声站混入、统计量可重算、p 值与优先标记、置换次数、快照校验和、名单不重叠）全部通过，`verified` 状态才能由负责人发布为 `published`；发布后研究页面与总览展示优先复访分区。失败或核对未通过的记录保留错误与核对明细，可用同一冻结算式恢复试算。
+
 ## 演示数据与一天剧本
 
 固定seed=42，3个来源 ` HL-202611-01/02/03`，每来源240条，共720条业务记录；三个账号和首轮种子任务。自然键检查后仅插入缺失数据，连跑seed不重复、不覆盖用户修改。`SEED_DEMO=true` 时启动自动执行；失败记录日志但不阻塞服务。首轮任务同样由独立worker真实计算。
@@ -81,7 +95,8 @@ Survey / StationReading / DensityRun / VisitPlan 是核心实体；另有User和
 5. 09:21 独立worker消费Redis队列，返回实算结果与输入校验和。
 6. 09:25 分析师查看专属诊断及逐行结果，并下载CSV复算。
 7. 09:30 提交“十一月业务复核意见”，负责人核对并批准。
-8. 09:40 viewer下载批准快照，查看审计中的worker完成与批准事件。
+8. 09:35 分析师以“首轮种子研究”为早期分区，选 `HL-202611-02/03` 为两期复测，冻结“十一月两期复测”。
+9. 09:40 viewer下载批准快照，查看复测校正的优先复访分区与审计中的worker完成、复测发布事件。
 
 ## 目录与本地开发
 
@@ -103,6 +118,6 @@ backend/migrations/001_initial.sql
 | DATABASE_URL / REDIS_URL | Compose内部连接，定义在compose的env锚点 |
 | ARTIFACT_DIR | `/artifacts`，后端worker共享 |
 
-共享枚举：`backend/src/constants/enums.py` 与 `frontend/src/constants/enums.js` 都定义 admin/analyst/viewer、queued/running/completed/failed、draft/approved。后端service检查对应字符串；README为全量值说明。共享前端组件table/status/chart/business跨总览、结果、配置与复核复用；actions hook和format utils负责交互/格式。后端errors与rate_limit是两个中间件。
+共享枚举：`backend/src/constants/enums.py` 与 `frontend/src/constants/enums.js` 都定义 admin/analyst/viewer、queued/running/completed/failed、draft/approved，以及复测的 queued/running/verified/published/failed。后端service检查对应字符串；README为全量值说明。共享前端组件table/status/chart/business跨总览、结果、配置与复核复用；actions hook和format utils负责交互/格式。后端errors与rate_limit是两个中间件。
 
 测试及截图在批根 `test-artifacts/gb-0042/`，不混入源码。独立算法oracle、HTTP完整流程和真实Playwright浏览器流程见该目录 `TESTING.md`。License：MIT。
