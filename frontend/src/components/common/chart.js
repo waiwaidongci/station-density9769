@@ -1,0 +1,2 @@
+import {esc,fmt} from '../../utils/format.js';
+export function bars(items){if(!items.length)return '<p class="empty">当前参数未产生符合条件的分组或规则，可调整配置后重新执行。</p>';const max=Math.max(...items.map(x=>Math.abs(x.value)),.00001);return '<div class="bars">'+items.map(x=>'<div class="bar"><span>'+esc(x.label)+'</span><i style="--w:'+Math.max(1,Math.abs(x.value)/max*100)+'%" class="'+(x.value<0?'negative':'')+'"></i><b>'+fmt(x.value)+'</b></div>').join('')+'</div>'}

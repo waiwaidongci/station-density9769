@@ -1,0 +1,3 @@
+export function action(selector,handler){document.querySelector(selector)?.addEventListener('submit',async event=>{event.preventDefault();const button=event.target.querySelector('button[type="submit"]');if(button)button.disabled=true;try{await handler(event.target)}catch(error){toast(error.message,true)}finally{if(button)button.disabled=false}})}
+export function toast(message,error=false){const el=document.getElementById('notice');el.textContent=message;el.className=error?'notice error':'notice';el.hidden=false;el.scrollIntoView({block:'nearest'});clearTimeout(window.noticeTimer);window.noticeTimer=setTimeout(()=>el.hidden=true,5000);}
+export function bind(selector,event,handler){document.querySelector(selector)?.addEventListener(event,handler)}

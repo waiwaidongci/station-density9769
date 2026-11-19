@@ -1,0 +1,2 @@
+import {esc,fmt} from '../../utils/format.js';
+export function table(rows,columns,{limit=20,offset=0}={}){if(!rows.length)return '<div class="empty"><strong>这里还没有记录。</strong><p>先在数据页新增业务批次和样本，再创建一条分析任务。</p></div>';return '<div class="table-wrap"><table><thead><tr>'+columns.map(c=>'<th>'+esc(c.label||c.key)+'</th>').join('')+'</tr></thead><tbody>'+rows.slice(offset,offset+limit).map(r=>'<tr>'+columns.map(c=>'<td>'+fmt(r[c.key])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'}

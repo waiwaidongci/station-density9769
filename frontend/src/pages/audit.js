@@ -1,0 +1,2 @@
+import {localTime} from '../utils/format.js';import {api} from '../api/client.js';import {table} from '../components/common/table.js';
+export async function auditPage(){const rows=(await api('/audit')).map(r=>({...r,created_at:localTime(r.created_at)}));return '<section class="page-heading"><p class="eyebrow">06 / TRACE & ACCOUNTABILITY</p><h1>每一次执行与复核，都能找到来路。</h1><p>记录角色登录、来源修改、任务执行和业务说明批准；最近200条事件。</p></section>'+table(rows,[{key:'created_at',label:'北京时间'},{key:'actor',label:'操作人'},{key:'action',label:'动作'},{key:'target',label:'对象'},{key:'detail',label:'说明'}],{limit:200})}

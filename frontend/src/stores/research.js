@@ -1,0 +1,1 @@
+export const research={sources:[],runs:[],notes:[],sourceId:null,runId:null,records:[],page:0,async refresh(sourcesApi,runsApi,notesApi){[this.sources,this.runs,this.notes]=await Promise.all([sourcesApi.list(),runsApi.list(),notesApi.list()]);if(!this.sourceId&&this.sources.length)this.sourceId=this.sources[0].id;if(!this.runId&&this.runs.length)this.runId=this.runs[0].id;}};
